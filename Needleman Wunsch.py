@@ -7,6 +7,9 @@ import numpy as np
 from Bio.Align import substitution_matrices
 
 
+def MAX(set):
+    return (max(set))
+
 #Cleansing the matrix data and extracting the alphabet and the modified matrix
 def matrix_extraction():
     #Temporary matrix to store the BLOSUM in
@@ -15,14 +18,12 @@ def matrix_extraction():
     #Empty dictionary on which storing the alphabet
     alphabet = {}
     alph = temp_matrix.alphabet
-    #Deleting the character used for gap (we don't use it)
-    alph = alph[:-1]
     #Filling the dictionary
-    for i in range(len(alph)):
-        alphabet[alph[i] ] = i 
+    for i in range(len(alph) - 1):
+        alphabet[alph[i]] = i 
 
     #Extracting the matrix
-    blosum62 = np.asmatrix(temp_matrix)
+    blosum62 = np.asarray(temp_matrix)
     
     #Deleting the last row and the last column
     blosum62 = np.delete(blosum62, -1, 0)
@@ -39,88 +40,102 @@ def matrix_extraction():
     return alphabet, blosum62
 
 def matrix_filling(str1, str2, gap_penalty, extension_penalty, matrix, alphabet):
-    mat = np.zeros([len(str1) + 1, len(str2) + 1])
+    mat = np.zeros((len(str1), len(str2)))
 
     for i in range(len(str1)):
         for j in range(len(str2)):
 
             #Particular case for first element
             if i == 0 and j == 0:
-                mat[i][j] = matrix[alphabet[str1[i]]][alphabet[str2[j]]]
+                mat[i][j] = matrix[alphabet.get(str1[i]), alphabet.get(str2[j])]
 
             #Particular case for first row
-            if i == 0 and j != 0:
-                mat[i][j] = mat[i][j-1]
+            elif i == 0 and j != 0:
+                mat[i][j] = mat[i][j-1] - gap_penalty
 
             #Particular case for first column
-            if i != 0 and j == 0:
-                mat[i][j] = mat[i-1][j]
-
+            elif i != 0 and j == 0:
+                mat[i][j] = mat[i-1][j] - gap_penalty
+            else:
             #General case
-            mat[i][j] = max(mat[i-1][j-1] + matrix[alphabet[str1[i]]][alphabet[str2[j]]], mat[i-1][j] - gap_penalty, mat[i][j-1] - gap_penalty)
-    
-    return mat[len(str1)][len(str2)] , path_finder(matrix, i = len(str1), j = len(str2))
+                a = mat[i-1][j-1] + matrix[alphabet.get(str1[i]), alphabet.get(str2[j])]
+                b = mat[i-1][j] - gap_penalty
+                c = mat[i][j-1] - gap_penalty
+            
+                mat[i][j] = MAX([a, b, c])
+
+    print(mat)
+    input()
+    return max(max(mat[:,len(str2) -1]), max(mat[len(str1) -1,:])), path_finder(mat, i = len(str1) -1, j = len(str2) -1)
 
 
 #Traceback function
-def path_finder(matrix, i, j, str=''):
+def path_finder(matrix, i, j, str=""):
 
     #Particular case for first element
-
     if i == 0 and j == 0:
         str = str + 'P'
+        str = str[::-1]
         return str
     #Particular case for first row
-    if i == 0 and j != 0:
+    if not i > 0 and j > 0:
         str = str + 'R'
-        path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
-    #Particular case for first column
-    if i != 0 and j == 0:
+        return path_finder(matrix = matrix, i = i, j = j-1, str=str)
+    #Particular case) for first column
+    if i > 0 and not j > 0:
         str = str + 'D'
-        path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
+        return path_finder(matrix = matrix, i = i-1, j = j, str=str)
 
     #General Case
-    if max(matrix[i-1][j-1], matrix[i-1][j], matrix[i][j-1]) == matrix[i-1][j-1]:
+    max = np.max([matrix[i-1][j-1], matrix[i-1][j], matrix[i][j-1] ])
+    if max == matrix[i-1, j-1]:
         str = str + 'P'
-        path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
-    elif max(matrix[i-1][j-1], matrix[i-1][j], matrix[i][j-1]) == matrix[i-1][j]:
+        return path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
+    elif max == matrix[i-1, j]:
         str = str + 'D'
-        path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
-    elif max(matrix[i-1][j-1], matrix[i-1][j], matrix[i][j-1]) == matrix[i][j-1]:
+        return path_finder(matrix = matrix, i = i-1, j = j, str=str)
+    elif max == matrix[i, j-1]:
         str = str + 'R'
-        path_finder(matrix = matrix, i = i-1, j = j-1, str=str)
+        return path_finder(matrix = matrix, i = i, j = j-1, str=str)
     
 
 def pretty_print(str1, str2, alignement, score, gap_penalty, extension_penalty):
     new_alignment = ""
     for i in range(len(alignement)):
-        if alignement[i] == 'P':
-            if str1[i] == str2[i]:
-                new_alignment = new_alignment + "-"
-            else:
-                new_alignment = new_alignment + " "
-        elif alignement[i] == 'D':
-            str2 = str2[:i] + "-" + str2[i:]
-        elif alignement[i] == 'R':
-            str1 = str1[:i] + "-" + str1[i:]
+        if i < len(str1) and i < len(str2):
+            if alignement[i] == 'P':
+                if str1[i] == str2[i]:
+                    new_alignment = new_alignment + "|"
+                else:
+                    new_alignment = new_alignment + " "
+            elif alignement[i] == 'D':
+                str2 = str2[:i] + "-" + str2[i:]
+            elif alignement[i] == 'R':
+                str1 = str1[:i] + "-" + str1[i:]
+        elif i < len(str1) and i == len(str2):
+            for j in range(len(str2)-len(str1)):
+                str1 = str1 + "-"
+        elif i < len(str2) and i == len(str1):
+            for j in range(len(str1)-len(str2)):
+                str2 = str2 + "-"
 
 
     print(str1)
     print(new_alignment)
     print(str2)
 
-    print("The alignment score is: " + score +".")
+    print("The alignment score is:",  score ,".")
     if gap_penalty == extension_penalty:
-        print("The extension penalty is equal to the gap penalty which is " + gap_penalty + ".")
+        print("The extension penalty is equal to the gap penalty which is", gap_penalty , ".")
     else:
-        print("The extension penalty is " + extension_penalty + ", while the gap penalty is " + gap_penalty +".")
+        print("The extension penalty is" , extension_penalty , ", while the gap penalty is", gap_penalty ,".")
     pass
 
 def main():
     print("Input first string")
-    str1 = input()
+    str1 = "TFDERILGVQTYWAECLA"
     print("Input second string")
-    str2 = input()
+    str2 = "QTFWECIKGDNATY"
 
     print("Gap Penalty")
     gap_penalty = input()
@@ -128,10 +143,7 @@ def main():
     extension_penalty = input()
 
     alphabet, matrix = matrix_extraction()
-
-    score , alignment = matrix_filling(str1, str2, gap_penalty, extension_penalty, matrix, alphabet)
-
-    pretty_print(str1, str2, alignement, score, gap_penalty, extension_penalty)
-
+    score , alignment = matrix_filling(str1, str2, float(gap_penalty), float(extension_penalty), matrix = matrix, alphabet = alphabet)
+    pretty_print(str1, str2, alignment, score, gap_penalty, extension_penalty)
 
 main()
